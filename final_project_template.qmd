@@ -1,9 +1,10 @@
 ---
 title: "Your Title"
 subtitle: "BMIN5030 Final Project"
-author: "FirstName LastName"
+author: "Tanis Dorwart"
 format: html
 editor: visual
+theme: litera
 number-sections: true
 embed-resources: true
 ---
