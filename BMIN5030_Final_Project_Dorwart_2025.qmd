@@ -2,16 +2,19 @@
 title: "Evaluating Car Crash Incidents in Philadelphia"
 subtitle: "BMIN5030 Final Project"
 author: "Tanis Dorwart"
-format: html
+format: 
+  html:
+    theme: litera
+    code-fold: false
+    code-overflow: wrap
 editor: visual
-theme: litera
 number-sections: true
 embed-resources: true
 ---
 
 ------------------------------------------------------------------------
 
-## Overview {#sec-overview}
+# Overview {#sec-overview}
 
 Give a brief a description of your project and its goal(s), what data you are using to complete it, and what two faculty/staff in different fields you have spoken to about your project with a brief summary of what you learned from each person. Include a link to your final project GitHub repository.
 
@@ -21,7 +24,7 @@ Speaking with \_\_ provided insight into \_\_.
 
 Follow the link [here](https://github.com/tanisdorwart/final-project) to access the GitHub repository.
 
-## Introduction {#sec-introduction}
+# Introduction {#sec-introduction}
 
 Describe the problem addressed, its significance, and some background to motivate the problem. This should extend what is in the @sec-overview.
 
@@ -31,14 +34,448 @@ Explain why your problem is interdisciplinary, what fields can contribute to its
 
 Philadelphia is a very diverse, highly trafficked city. It is to be expected that certain areas with higher traffic volumes have an increased likelihood of accidents. I sought to find out if there were particular trends regarding factors like time of day or weather which make accidents more likely. Additionally, by plotting where these accidents occur, I can identify areas of Philadelphia which need enhanced safety precautions to decrease the likelihood of accidents.
 
-## Methods {#sec-methods}
+# Methods {#sec-methods}
 
 Describe the data used and general methodological approach used to address the problem described in the @sec-introduction. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why.
 
-## Results {#sec-results}
+Data used for this analysis was obtained from [OpenDataPhilly](https://opendataphilly.org/), a publicly available and accessible repository containing a wide range of data for the city of Philadelphia. The repository contains data of accidents in Philadelphia dating back to 2007, for the purpose of this analysis, accidents which occurred from 2020-2024 were selected. This website will also be the source of our shapefiles and neighborhood boundaries when generating our geospatial maps of this dataset.
+
+## R Libraries
+
+```{r}
+#| message: false
+#| warning: false
+# Load packages
+
+library("tidyverse")
+library("ggplot2")
+library("RColorBrewer")
+library("dplyr")
+library("stringr")
+library("readr")
+library("tidymodels")
+library("dotwhisker")
+library("broom")
+library("RColorBrewer")
+library("paletteer")
+library("maps")
+library("sf")
+library("osmdata")
+library("lwgeom")
+library("ggspatial")
+library("leaflet")
+```
+
+## Cleaning Data, Extracting Values of Interest
+
+```{r}
+crash_data <- read.csv("collision_crash_2020_2024.csv")
+
+# ----- Clean data -----
+crash_clean <- crash_data %>%
+  select(
+    automobile_count,
+    bicycle_count,
+    crash_month,
+    crash_year,
+    day_of_week,
+    fatal,
+    fatal_count,
+    hour_of_day,
+    motorcycle_count,
+    ped_count,
+    susp_minor_inj_count,
+    susp_serious_inj_count,
+    time_of_day,
+    total_units,
+    unbelted_occ_count,
+    unb_death_count,
+    unb_susp_serious_inj_count,
+    unbelted,
+    vehicle_count,
+    weather1,
+    weather2,
+    alcohol_related,
+    cell_phone,
+    distracted,
+    drugged_driver,
+    drug_related,
+    impaired_driver,
+    municipality,
+    county,
+    dec_longitude,
+    dec_latitude
+  )
+
+crash_clean <- mutate(crash_clean, crash_month = factor(crash_month, levels = c(1:12),
+                    labels = c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")))
+
+crash_clean <- mutate(crash_clean, day_of_week = factor(day_of_week, levels = c(1:7),
+                                                        labels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")))
+
+crash_clean <- crash_clean %>%
+  slice(-8108)
+
+crash_clean <- mutate(crash_clean, hour_of_day_12 = factor(hour_of_day, levels = c(0:23),
+                                                        labels = c("Midnight", "1am", "2am", "3am", "4am", "5am", "6am", "7am", "8am", "9am", "10am", "11am", "Noon", "1pm", "2pm", "3pm", "4pm", "5pm", "6pm", "7pm", "8pm", "9pm", "10pm", "11pm")))
+
+crash_clean <- mutate(crash_clean, weather1 = factor(weather1, levels = c(1:7),
+                                                     labels = c("Blowing Sand, Soil, Dirt", "Blowing Snow", "Clear", "Cloudy", "Fog, Smog, Smoke", "Freezing Rain or Freezing Drizzle", "Rain")))
+
+
+crash_clean <- mutate(crash_clean, weather2 = factor(weather2, levels = c(1:10, 98),
+                                                     labels = c("Blowing Sand, Soil, Dirt", "Blowing Snow", "Clear", "Cloudy", "Fog, Smog, Smoke", "Freezing Rain or Freezing Drizzle", "Rain", "Severe Crosswinds", "Sleet or Hail", "Snow", "Other")))
+
+crash_clean$fatal <- factor(crash_clean$fatal,
+                             levels = c(0, 1),
+                             labels = c("No", "Yes"))
+
+crash_clean$municipality <- factor(crash_clean$municipality)
+
+crash_clean$crash_year <- as.factor(crash_clean$crash_year)
+```
+
+# Results {#sec-results}
 
 Describe your results and include relevant tables, plots, and code/comments used to obtain them. You may refer to the @sec-methods as needed. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
 
-## Conclusion
+## Observing General Trends in Car Accidents
+
+Over the last five years, the overall number of car crashes is trending downward. However, the number of fatalities as a result of these accidents has not decreased at the same rate and remains relatively unchanged overall.
+
+```{r}
+# How many accidents occurred each year from 2020-2024 in Philadelphia?
+count(crash_clean, crash_year)
+
+ggplot(data = crash_clean, aes(x = crash_year, fill = crash_year)) +
+  geom_bar(position = "stack", stat = "count") +
+  labs(title = "Accidents Per Year",
+       x = "Year",
+       y = "Number of Accidents",
+       fill = "Year") +
+  theme_classic() +
+  scale_fill_manual(values = c("2020" = "#233d4d", 
+                               "2021" = "#fe7f2d",
+                               "2022" = "#fcca46",
+                               "2023" = "#a1c181",
+                               "2024" = "#619b8a")) +
+  geom_text(
+    stat = "count",
+    aes(label = after_stat(count)),
+    vjust = -0.5,
+    size = 4)
+
+# How many accidents resulted in fatalities for each year?
+crash_clean %>%
+  group_by(crash_year) %>%
+  count(fatal_count>0)
+
+ggplot(data = crash_clean, aes(x = crash_year, fill = fatal)) +
+  geom_bar(position = "stack", stat = "count") +
+  labs(title = "Accidents Resultsing in Fatalies Per Year",
+       x = "Year",
+       y = "Number of Accidents",
+       fill = "Fatalities") +
+  theme_classic() +
+  scale_fill_manual(values = c("No" = "#9DC0E3", 
+                               "Yes" = "#E06060")) +
+  geom_text(
+    stat = "count",
+    aes(label = after_stat(count)),
+    vjust = -0.5,
+    size = 4
+  )
+```
+
+## Factors Influencing Crash Rate
+
+I was curious if there was a particular time of the year, day of the week, hour of the day, or type of weather which influenced the likelihood of an accident occurring. Plots were generated to visualize how each of the previously mentioned factors may increase or decrease the potential of an accident.
+
+```{r}
+# Which month has the most automobile accidents
+ggplot(crash_clean, aes(x = crash_month, fill = crash_month)) + 
+  geom_bar() +
+  theme_bw() +
+  scale_fill_paletteer_d("MetBrewer::Redon") +
+  labs(title = "Number of Accidents Each Month",
+    x = "Month of the Year", 
+    y = "Number of Accidents",
+    fill = "Month") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 30, vjust = .6, hjust = 0.6))
+
+# In which month did the most crashes occur, filtered by year?
+ggplot(crash_clean, aes(x = crash_month, fill = crash_month)) + 
+  geom_bar() +
+  facet_grid(rows =  vars(crash_year)) +
+  theme_bw() +
+  scale_fill_paletteer_d("MetBrewer::Redon") +
+  labs(title = "Number of Accidents Each Month",
+    x = "Month of the Year", 
+    y = "Number of Accidents",
+    fill = "Month") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 30, vjust = .6, hjust = 0.6))
+
+# Which day of the week did the most crashes occur?
+ggplot(crash_clean, aes(x = day_of_week, fill = day_of_week)) + 
+  geom_bar() +
+  theme_bw() +
+  scale_fill_paletteer_d("MetBrewer::Tam") +
+  labs(title = "Number of Accidents Per Day of the Week",
+       x = "Day of the Week", 
+       y = "Number of Accidents",
+       fill = "Day of the Week") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 30, vjust = .6, hjust = 0.6))
+
+
+```
+
+August, October, and May have the highest number of accidents when looking at all accidents from 2020-2024. Interestingly, when filtered by year, new trends can be observed. For example, August only appears to remain the top month with the most accidents for years 2020 and 2021. Additionally, when examining the two most recent years of the report, the number of accidents by month is less variable and appears more uniform than the previous three years.
+
+Another interesting observation noted is that Friday is the day of the week when the most car accidents occur. This led me to ask: "Is an accident statistically more likely to occur on Friday compared to any other day of the week?".
+
+```{r}
+
+# Summarize the number of accidents which occured each day of the week into a new df
+crash_days <- crash_clean |>
+  filter(day_of_week %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")) |>
+  count(day_of_week)
+
+monday_count <- crash_days$n[crash_days$day_of_week == "Monday"]
+tuesday_count <- crash_days$n[crash_days$day_of_week == "Tuesday"]
+wednesday_count <- crash_days$n[crash_days$day_of_week == "Wednesday"]
+thursday_count <- crash_days$n[crash_days$day_of_week == "Thursday"]
+friday_count <- crash_days$n[crash_days$day_of_week == "Friday"]
+saturday_count <- crash_days$n[crash_days$day_of_week == "Saturday"]
+sunday_count <- crash_days$n[crash_days$day_of_week == "Sunday"]
+
+total_crashes <- nrow(crash_clean)
+
+# *** trying new thing
+#Monday vs Friday
+prop.test(
+  x = c(crash_days$n[crash_days$day_of_week == "Friday"], crash_days$n[crash_days$day_of_week == "Monday"]),
+  n = c(nrow(crash_clean), nrow(crash_clean)),
+  alternative = "greater"
+)
+
+#Tuesday vs Friday
+prop.test(
+  x = c(crash_days$n[crash_days$day_of_week == "Friday"], crash_days$n[crash_days$day_of_week == "Tuesday"]),
+  n = c(nrow(crash_clean), nrow(crash_clean)),
+  alternative = "greater"
+)
+
+#Wednesday vs Friday
+prop.test(
+  x = c(crash_days$n[crash_days$day_of_week == "Friday"], crash_days$n[crash_days$day_of_week == "Wednesday"]),
+  n = c(nrow(crash_clean), nrow(crash_clean)),
+  alternative = "greater"
+)
+
+#Thursday vs Friday
+prop.test(
+  x = c(crash_days$n[crash_days$day_of_week == "Friday"], crash_days$n[crash_days$day_of_week == "Thursday"]),
+  n = c(nrow(crash_clean), nrow(crash_clean)),
+  alternative = "greater"
+)
+
+#Saturday vs Friday
+prop.test(
+  x = c(crash_days$n[crash_days$day_of_week == "Friday"], crash_days$n[crash_days$day_of_week == "Saturday"]),
+  n = c(nrow(crash_clean), nrow(crash_clean)),
+  alternative = "greater"
+)
+
+#Sunday vs Friday
+prop.test(
+  x = c(crash_days$n[crash_days$day_of_week == "Friday"], crash_days$n[crash_days$day_of_week == "Sunday"]),
+  n = c(nrow(crash_clean), nrow(crash_clean)),
+  alternative = "greater"
+)
+
+crash_days <- crash_clean %>%
+  count(day_of_week) %>%
+  mutate(prop = n / sum(n))
+
+ggplot(crash_days, aes(x = day_of_week, y = n, fill = day_of_week)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Monday" = "#619b8a", "Tuesday" = "#619b8a", "Wednesday" = "#619b8a", "Thursday" = "#619b8a", "Saturday" = "#DB8181","Sunday" = "#619b8a", "Friday" = "#A8A8A8")) +
+  labs(title = "Proportion of Accidents per Day of Week",
+       x = "Day of Week",
+       y = "Number of Crashes",
+       caption = "Accidents on Friday are statistically more significant than days of the week denoted by teal.") +
+  geom_text(aes(label = scales::percent(prop)), vjust = -0.5) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+```
+
+With a p value \< 0.005, accidents on Friday are statistically more likely to happen than on a Monday, Tuesday, Wednesday, Thursday, or Sunday. However, accidents on Friday are not statistically more likely to happen than on a Saturday. I find this interesting as one would expect a higher volume of drivers during the week to commute to work as opposed to over the weekend for leisure.
+
+## Rush Hour & Car Accidents
+
+On average, there are \_\_ cars on the road in Philadelphia during rush hour (source). One would assume that an increased number of vehicles on the road would correlate to an increase in the number of accidents occurring throughout the day. Below are bar graphs and statistics to visualize and determine if accidents are more likely to occur during rush hour than outside of rush hour (3-6pm).
+
+```{r}
+#| fig-width: 8
+#What time of day are crashes most likely to occur?
+crash_clean %>%
+  filter(!is.na(hour_of_day_12)) %>%
+  ggplot(aes(x = hour_of_day_12, fill = hour_of_day_12)) + 
+  geom_rect(
+    aes(xmin = 15.5, xmax = 18.5, ymin = 0, ymax = 125), ## Evening "rush hour": 3-6pm
+    color = "gray70",
+    fill = "gray80",
+    inherit.aes = FALSE # Prevents inheriting the original data's aesthetics
+  ) +
+  geom_bar(show.legend = FALSE) +
+  labs(title = "Number of Accidents Each Hour of the Day",
+       x = "Hour of the Day", 
+       y = "Number of Accidents") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust = 1)) +
+  theme_minimal()
+
+# Are accidents statistically more likely to occur during rush hour than any other time of day?
+crash_hourly <- crash_clean |>
+  filter(!is.na(hour_of_day)) |>   # remove rows where hour_of_day is missing
+  mutate(
+    rush_hour = ifelse(hour_of_day %in% 15:18, "Rush Hour", "Other Times"),
+    rush_hour = factor(rush_hour, levels = c("Other Times", "Rush Hour"))
+  )
+
+
+table(crash_hourly$rush_hour)
+prop.table(table(crash_hourly$rush_hour))
+
+chisq.test(table(crash_hourly$rush_hour))
+
+rush_model <- glm(rush_hour ~ 1, data = crash_hourly, family = binomial)
+summary(rush_model)
+
+plogis(coef(rush_model))
+
+crash_hourly %>%
+  count(rush_hour) %>%
+  mutate(prop = n / sum(n)) |>
+  ggplot(aes(x = rush_hour, y = prop, fill = rush_hour)) +
+  geom_col(color = "black") +
+  geom_text(aes(label = scales::percent(prop)), vjust = -0.5) +
+  scale_fill_manual(values = c("Other Times" = "#A1C181", "Rush Hour" = "#FE7F2D")) +
+  theme_classic() +
+  guides(fill = guide_legend(title = "Time Frame", reverse = TRUE)) +
+  labs(title = "Proportion of Crashes During Rush Hour vs. Other Times",
+       x = "",
+       y = "Percent of Crashes")
+
+
+# To look for confounding factors:
+glm(rush_hour ~ day_of_week + crash_month + fatal, 
+    data = crash_hourly, family = binomial) |> summary()
+
+```
+
+There is an observed increase in crashes during the rush hour time frame of 3-6pm.
+
+\~24% of accidents occur during rush hour which accounts for only 3 out of the 24 hours of the day (12.5% of hours per day). If there was an even distribution of accidents thoroughout the day, it would take twice as long (6hrs) for \~25% of car accidents to happen in a day. This suggests an strong correlation and likelihood of accidents occurring during rush hour compared to evenly distributed rate of occurrence throughout the day.
+
+## Bike Safety
+
+Over the last five years, the number of bikes involved in car accidents has remained relatively unchanged. According to Public Use Microdata Areas (PUMAs), Philadelphia has some of the highest rates of bicycle commuters across the entire country with roughly 8.4% of individuals commuting via bike in South Philly and 5.7% of Center City residents ([source](https://bicyclecoalition.org/the-bike-counts-report-for-fall-2023-is-live/#:~:text=A%20larger%20Census%20geography%20known,to%20ACS%201%20year%20estimates.)).
+
+```{r}
+# How many crashes involved bicycles?
+
+ggplot(data = crash_clean, aes(x = crash_year, fill = bicycle_count>0)) +
+  geom_bar(position = "stack", stat = "count") +
+  labs(title = "Number of Bicycles Involved in Each Crash",
+       x = "Year",
+       y = "Number of Accidents",
+       fill = "Bicycle involved?") +
+  theme_classic() +
+  geom_text(
+    stat = "count",
+    aes(label = after_stat(count)), vjust = 0.5, size = 4
+  )
+```
+
+According to the Bicycle Coalition of Philadelphia, in 2023, "51.1% of bicycle users on the Market St bridge and 85.1% on the JFK Bridge were riding on the sidewalk. This demonstrates a significant need for better infrastructure, especially to travel hubs like the William Gray Amtrak & Regional Rail Station on 30th Street." ([source](https://storymaps.arcgis.com/stories/f019ae7f7aaf489f9fb828e7038b89d2)).
+
+These two bridges are a main point of travel for commuters who live or work on opposite sides of the Schuylkill river. As a result of unsafe biking routes over this bridge, in March of this year the city began construction on the bridge to install a two-way bike lane with concrete separators and traffic lights. Prior to this construction, no bike lanes were present on the Market Street bridge, requiring cyclists to ride on the sidewalk or in car traffic lanes.
+
+## Does weather increase the likelihood of an accident?
+
+It is not uncommon to assume that the weather and road conditions can affect the likelihood of an accident. I sought to determine how strong of a factor the weather played in the cause of an accident.
+
+```{r}
+
+crash_clean %>%
+  filter(!is.na(weather1)) %>%
+  ggplot(aes(x = weather1, fill = weather1)) + 
+  geom_bar() +
+  theme_classic() +
+  labs(title = "Number of Accidents per Each Weather Condition",
+       x = "Weather", 
+       y = "Number of Accidents",
+       fill = "Weather") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 30, vjust = .6, hjust = 0.6))
+
+
+
+# Are more accidents more likely to be caused by severe weather in the winter months?
+winter_weather <- crash_clean %>%
+  filter(!is.na(weather1)) %>%
+  group_by(crash_month)
+
+ggplot(winter_weather, aes(x = crash_month, fill = weather1)) + 
+  geom_bar() +
+  theme_classic() +
+  labs(title = "Number of Accidents per Each Weather Condition",
+       x = "Weather", 
+       y = "Number of Accidents",
+       fill = "Weather") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 30, vjust = .6, hjust = 0.6))
+
+ggplot(winter_weather, aes(x = crash_month, fill = weather1)) + 
+  geom_bar(position = "fill") +
+  theme_classic() +
+  labs(title = "Percentage of Accidents per Each Weather Condition",
+       x = "Weather", 
+       y = "Percent of Accidents",
+       fill = "Weather") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 30, vjust = .6, hjust = 0.6))
+
+# *** statistics
+
+```
+
+Majority of accidents occurred during clear weather conditions, with rain being the second highest category.
+
+## Visualizing Geo-spatial Data
+
+All roads in Philadelphia are not created equal and some are much safer than others due to lower speed limits, traffic lights instead of stop signs, visibility, and quantity of drivers on that road. I wished to visualize each recorded accident from 2020-2024 on a map of Philadelphia to identify areas with a higher rate of accidents. To complete this analysis we will need to acquire .geojson and shapefile data from this time frame ([source](https://metadata.phila.gov/#home/datasetdetails/5543865420583086178c4eba/representationdetails/68ae0feae3c7df02c27bfe7b/)).
+
+```{r}
+
+
+
+```
+
+# Conclusion
 
 This the conclusion. The @sec-results can be invoked here.
+
+# References
