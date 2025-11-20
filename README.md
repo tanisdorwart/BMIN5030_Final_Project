@@ -1,19 +1,10 @@
 # BMIN5030 Final Project
 
-This repository contains templates for the final written report and GitHub repository. Follow the instructions below to clone this repository, and then turn in your final project's code via a pull request to this repository.
+This repository contains the code and dataset files needed to perform analysis of car accidents in Philadelphia.
 
-1. To start, **fork** this BMIN503_Final_Project repository.
-1. **Clone** the forked repository to your computer.
-1. Modify the files provided, add your own, and **commit** changes to complete your final project.
-1. **Push**/sync the changes up to your GitHub account.
-1. Create a **pull request** on this, the original BMIN503_Final_Project, repository to turn in your final project.
+Data used to produce this analysis was sourced from OpenDataPhilly, using their Crash Data 2020-2024 dataset. City limit boundaries which are utilized for the geospatial maps were obtained from here.
 
-
-Follow the instructions [here][forking] if you are unsure what the above steps mean.
-
-DUE DATE FOR FINAL VERSION: 12/12/25 11:59PM EST. This is a hard deadline. Turn in whatever you have by this date.
-
-
-<!-- Links -->
-[forking]: https://guides.github.com/activities/forking/
-
+Data files needed:
+Crash Data 2020-2024 (CSV) - https://opendataphilly.org/datasets/crashes/
+Crash Data 2020-2024 (SHP) - https://opendataphilly.org/datasets/crashes/
+City Limits (GeoJSON) - https://opendataphilly.org/datasets/city-limits/
